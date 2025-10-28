@@ -92,6 +92,10 @@ class Ping(db.Model):
 # AUTH ROUTES
 # -----------------------------
 
+@app.route('/')
+def home():
+    return jsonify({"message": "API running!"})
+
 @app.route('/auth/register', methods=['POST'])
 def register():
     data = request.get_json()
