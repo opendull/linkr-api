@@ -23,7 +23,8 @@ app = Flask(__name__)
 # -----------------------------
 # CONFIGURATION
 # -----------------------------
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres:Shubham%401023153@db.ousvcwmcauatiwrwjkxd.supabase.co:5432/postgres'
+#Shubham%401023153
+app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres.ousvcwmcauatiwrwjkxd:Shubham%401023153@aws-1-us-east-1.pooler.supabase.com:6543/postgres'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['JWT_SECRET_KEY'] = 'supersecretkey'
 
