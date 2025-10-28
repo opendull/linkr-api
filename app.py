@@ -9,6 +9,8 @@ import psycopg2.extras
 from datetime import datetime
 from dataclasses import dataclass
 
+app = Flask(__name__)
+
 def get_db_connection():
     return psycopg2.connect(
         host="aws-1-us-east-1.pooler.supabase.com",
