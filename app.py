@@ -11,11 +11,11 @@ from dataclasses import dataclass
 
 def get_db_connection():
     return psycopg2.connect(
-        host="db.ousvcwmcauatiwrwjkxd.supabase.co",
+        host="aws-1-us-east-1.pooler.supabase.com",
         database="postgres",
-        user="postgres",
+        user="postgres.ousvcwmcauatiwrwjkxd",
         password="Shubham@1023153",
-        port=5432
+        port=6543
     )
 
 app = Flask(__name__)
