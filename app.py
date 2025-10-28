@@ -15,7 +15,8 @@ def get_db_connection():
         database="postgres",
         user="postgres.ousvcwmcauatiwrwjkxd",
         password="Shubham@1023153",
-        port=6543
+        port=6543,
+        sslmode="require"
     )
 
 app = Flask(__name__)
@@ -24,7 +25,16 @@ app = Flask(__name__)
 # CONFIGURATION
 # -----------------------------
 #Shubham%401023153
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres.ousvcwmcauatiwrwjkxd:Shubham%401023153@aws-1-us-east-1.pooler.supabase.com:6543/postgres'
+app.config['SQLALCHEMY_DATABASE_URI'] = (
+    'postgresql+psycopg2://postgres:Shubham%401023153@aws-1-us-east-1.pooler.supabase.com:6543/postgres'
+    '?sslmode=require'
+)
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    "pool_pre_ping": True,
+    "pool_recycle": 300,
+    "pool_size": 1,
+    "max_overflow": 0
+}
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['JWT_SECRET_KEY'] = 'supersecretkey'
 
