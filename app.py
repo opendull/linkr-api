@@ -77,6 +77,16 @@ class Location:
             longitude=row["longitude"],
             updated_at=row.get("updated_at") if isinstance(row, dict) else row[3]
         )
+    
+class Ping(db.Model):
+    __tablename__ = 'pings'
+
+    id = db.Column(db.Integer, primary_key=True)
+    sender_id = db.Column(db.UUID(as_uuid=True), db.ForeignKey('users.id'), nullable=False)
+    receiver_id = db.Column(db.UUID(as_uuid=True), db.ForeignKey('users.id'), nullable=False)
+    status = db.Column(db.String(20), default='pending')
+    created_at = db.Column(db.DateTime, default=db.func.now())
+    updated_at = db.Column(db.DateTime, default=db.func.now(), onupdate=db.func.now())
 
 # -----------------------------
 # AUTH ROUTES
@@ -371,6 +381,64 @@ def get_friend_location(friend_id):
     finally:
         cur.close()
         conn.close()
+
+# -----------------------------
+# PING
+# -----------------------------
+
+@app.route('/ping', methods=['POST'])
+@jwt_required()
+def send_ping():
+    data = request.get_json()
+    current_user_id = get_jwt_identity()
+    receiver_id = data.get('receiver_id')
+
+    if not receiver_id:
+        return jsonify({"error": "receiver_id is required"}), 400
+
+    # Prevent sending ping to self
+    if receiver_id == current_user_id:
+        return jsonify({"error": "You cannot ping yourself"}), 400
+
+    new_ping = Ping(sender_id=current_user_id, receiver_id=receiver_id)
+    db.session.add(new_ping)
+    db.session.commit()
+
+    return jsonify({"message": "Ping sent successfully!"}), 201
+
+@app.route('/ping/incoming', methods=['GET'])
+@jwt_required()
+def incoming_pings():
+    current_user_id = get_jwt_identity()
+    pings = Ping.query.filter_by(receiver_id=current_user_id, status='pending').all()
+
+    results = [{
+        "id": p.id,
+        "sender_id": p.sender_id,
+        "status": p.status,
+        "created_at": p.created_at
+    } for p in pings]
+
+    return jsonify(results)
+
+@app.route('/ping/<int:ping_id>/respond', methods=['POST'])
+@jwt_required()
+def respond_ping(ping_id):
+    data = request.get_json()
+    status = data.get('status')
+    current_user_id = get_jwt_identity()
+
+    if status not in ['accepted', 'rejected']:
+        return jsonify({"error": "Invalid status"}), 400
+
+    ping = Ping.query.filter_by(id=ping_id, receiver_id=current_user_id).first()
+    if not ping:
+        return jsonify({"error": "Ping not found or unauthorized"}), 404
+
+    ping.status = status
+    db.session.commit()
+
+    return jsonify({"message": f"Ping {status} successfully!"})
 
 
 # -----------------------------
