@@ -27,7 +27,7 @@ def get_db_connection():
 # -----------------------------
 #Shubham%401023153
 app.config['SQLALCHEMY_DATABASE_URI'] = (
-    'postgresql://postgres:Shubham%401023153@db.ousvcwmcauatiwrwjkxd.supabase.co:5432/postgres?sslmode=require'
+    'postgresql+psycopg2://postgres.ousvcwmcauatiwrwjkxd:Shubham%401023153@aws-1-us-east-1.pooler.supabase.com:6543/postgres?sslmode=require'
 )
 
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
