@@ -8,6 +8,7 @@ import psycopg2
 import psycopg2.extras
 from datetime import datetime
 from dataclasses import dataclass
+from sqlalchemy.pool import NullPool
 
 app = Flask(__name__)
 
@@ -30,10 +31,8 @@ app.config['SQLALCHEMY_DATABASE_URI'] = (
 )
 
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
-    "pool_pre_ping": True,
-    "pool_recycle": 300,
-    "pool_size": 1,
-    "max_overflow": 0
+    "poolclass": NullPool,
+    "connect_args": {"sslmode": "require"},
 }
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['JWT_SECRET_KEY'] = 'supersecretkey'
