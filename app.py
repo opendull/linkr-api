@@ -252,28 +252,37 @@ def accept_friend_request(request_id):
     conn = get_db_connection()
     cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
+    # Fetch the friend request
     cursor.execute("SELECT * FROM friend_requests WHERE id = %s", (request_id,))
     request_data = cursor.fetchone()
 
     if not request_data:
+        cursor.close()
+        conn.close()
         return jsonify({'message': 'Request not found'}), 404
 
-    # ✅ Ensure the current user is the receiver
+    # Ensure the current user is the receiver
     if str(request_data['receiver_id']) != str(current_user_id):
+        cursor.close()
+        conn.close()
         return jsonify({'message': 'Invalid or unauthorized request'}), 403
 
-    # ✅ Update status to accepted
+    # Update request status to 'accepted'
     cursor.execute("""
         UPDATE friend_requests 
         SET status = 'accepted', updated_at = NOW()
         WHERE id = %s
     """, (request_id,))
 
-    # ✅ Add both as friends
+    # ✅ Ensure correct order for friends table
+    user1_id, user2_id = sorted([request_data['requester_id'], request_data['receiver_id']])
+
+    # Insert into friends table safely (avoid duplicates)
     cursor.execute("""
         INSERT INTO friends (user1_id, user2_id)
         VALUES (%s, %s)
-    """, (request_data['requester_id'], request_data['receiver_id']))
+        ON CONFLICT (user1_id, user2_id) DO NOTHING
+    """, (user1_id, user2_id))
 
     conn.commit()
     cursor.close()
