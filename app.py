@@ -14,11 +14,11 @@ app = Flask(__name__)
 
 def get_db_connection():
     return psycopg2.connect(
-        host="db.ousvcwmcauatiwrwjkxd.supabase.co",
+        host="aws-1-us-east-1.pooler.supabase.com",
+        port=6543,
         database="postgres",
-        user="postgres",
-        password="Shubham@1023153",
-        port=5432,
+        user="postgres.ousvcwmcauatiwrwjkxd",
+        password="Shubham@1023153",  # or better: os.getenv("DB_PASSWORD")
         sslmode="require"
     )
 
