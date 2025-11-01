@@ -178,17 +178,25 @@ def get_user(id):
 @app.route('/friends', methods=['GET'])
 @jwt_required()
 def get_friends():
-    user_id = get_jwt_identity()
+    # Convert JWT identity to UUID to match database type
+    user_id = uuid.UUID(get_jwt_identity())
+
+    # Query friendships where the current user is either user1 or user2
     friendships = Friend.query.filter(
         (Friend.user1_id == user_id) | (Friend.user2_id == user_id)
     ).all()
 
     friend_list = []
     for f in friendships:
+        # Determine the friend ID (the other user in the friendship)
         friend_id = f.user2_id if f.user1_id == user_id else f.user1_id
         friend = User.query.get(friend_id)
         if friend:
-            friend_list.append({'id': friend.id, 'name': friend.name, 'email': friend.email})
+            friend_list.append({
+                'id': str(friend.id),  # Convert UUID to string for JSON
+                'name': friend.name,
+                'email': friend.email
+            })
 
     return jsonify(friend_list)
 
