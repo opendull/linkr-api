@@ -32,8 +32,7 @@ cred_dict = json.loads(cred_json_str)  # Convert string back to dict
 
 # Initialize Firebase Admin SDK
 cred = credentials.Certificate(cred_dict)
-initialize_app(cred)  # ✅ This line does not change
-
+firebase_admin.initialize_app(cred)  # ✅ This line does not change
 
 # -----------------------------
 # CONFIGURATION
