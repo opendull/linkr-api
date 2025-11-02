@@ -556,7 +556,9 @@ def incoming_pings():
                 "created_at": ping.created_at.isoformat() if ping.created_at else None,
                 "location": {
                     "name": str(location.name),
-                    "address": str(location.address) if location.address else None
+                    "address": str(location.address) if location.address else None,
+                     "latitude": float(location.latitude),
+                     "longitude": float(location.longitude)
                 }
             }
             results.append(ping_data)
