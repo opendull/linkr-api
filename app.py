@@ -9,6 +9,8 @@ import psycopg2.extras
 from datetime import datetime
 from dataclasses import dataclass
 from sqlalchemy.pool import NullPool
+import firebase_admin
+from firebase_admin import credentials, messaging
 
 app = Flask(__name__)
 
@@ -21,6 +23,11 @@ def get_db_connection():
         password="Shubham@1023153",  # or better: os.getenv("DB_PASSWORD")
         sslmode="require"
     )
+
+# Initialize Firebase Admin SDK
+cred = credentials.Certificate("linkr-notification-firebase-adminsdk-fbsvc-5c70168807.json")  # path to your downloaded key file
+firebase_admin.initialize_app(cred)
+
 
 # -----------------------------
 # CONFIGURATION
@@ -40,6 +47,20 @@ app.config['JWT_SECRET_KEY'] = 'supersecretkey'
 db = SQLAlchemy(app)
 bcrypt = Bcrypt(app)
 jwt = JWTManager(app)
+
+
+def send_fcm_notification(token: str, title: str, body: str, data: dict = None):
+    """Send a push notification via Firebase Cloud Messaging."""
+    message = messaging.Message(
+        notification=messaging.Notification(title=title, body=body),
+        token=token,
+        data=data or {}
+    )
+    try:
+        response = messaging.send(message)
+        print("✅ FCM sent:", response)
+    except Exception as e:
+        print("❌ FCM error:", e)
 
 # -----------------------------
 # MODELS
@@ -97,6 +118,14 @@ class Ping(db.Model):
     status = db.Column(db.String(20), default='pending')
     created_at = db.Column(db.DateTime, default=db.func.now())
     updated_at = db.Column(db.DateTime, default=db.func.now(), onupdate=db.func.now())
+
+class UserFCMToken(db.Model):
+    __tablename__ = 'user_fcm_tokens'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.String, db.ForeignKey('users.id'), nullable=False)
+    fcm_token = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 # -----------------------------
 # AUTH ROUTES
@@ -416,7 +445,6 @@ def get_friend_location(friend_id):
 # -----------------------------
 # PING
 # -----------------------------
-
 @app.route('/ping', methods=['POST'])
 @jwt_required()
 def send_ping():
@@ -425,17 +453,26 @@ def send_ping():
     receiver_id = data.get('receiver_id')
 
     if not receiver_id:
-        return jsonify({"error": "receiver_id is required"}), 400
-
-    # Prevent sending ping to self
+        return jsonify({"error": "receiver_id required"}), 400
     if receiver_id == current_user_id:
-        return jsonify({"error": "You cannot ping yourself"}), 400
+        return jsonify({"error": "Cannot ping self"}), 400
 
-    new_ping = Ping(sender_id=current_user_id, receiver_id=receiver_id)
-    db.session.add(new_ping)
+    ping = Ping(sender_id=current_user_id, receiver_id=receiver_id)
+    db.session.add(ping)
     db.session.commit()
 
-    return jsonify({"message": "Ping sent successfully!"}), 201
+    # Send notification via Firebase
+    sender = User.query.get(current_user_id)
+    tokens = UserFCMToken.query.filter_by(user_id=receiver_id).all()
+    for t in tokens:
+        send_fcm_notification(
+            t.fcm_token,
+            title="New Ping",
+            body=f"{sender.name if sender else 'Someone'} pinged you",
+            data={"ping_id": str(ping.id), "sender_id": str(current_user_id)}
+        )
+
+    return jsonify({"message": "Ping sent and notification triggered!"}), 201
 
 @app.route('/ping/incoming', methods=['GET'])
 @jwt_required()
@@ -494,10 +531,42 @@ def search_users():
     ]
     return jsonify(result)
 
+
+# -----------------------------
+# FIREBASE CLOUD MESSAGING
+# -----------------------------
+
+@app.route('/fcm/register', methods=['POST'])
+@jwt_required()
+def register_fcm():
+    """
+    Register or update the Firebase token of a device for the current user.
+    The Android app should call this when it gets a new FCM token.
+    """
+    data = request.get_json()
+    new_token = data.get('token')
+    if not new_token:
+        return jsonify({"error": "FCM token is required"}), 400
+
+    user_id = get_jwt_identity()
+
+    # Check if the user already has a token
+    existing_token = UserFCMToken.query.filter_by(user_id=user_id).first()
+    if existing_token:
+        # Update the token and updated_at timestamp
+        existing_token.fcm_token = new_token
+        existing_token.updated_at = datetime.utcnow()
+    else:
+        # Insert new token
+        db.session.add(UserFCMToken(user_id=user_id, fcm_token=new_token))
+
+    db.session.commit()
+    return jsonify({"message": "FCM token registered/updated successfully"}), 200
+
 # -----------------------------
 # MAIN
 # -----------------------------
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True)
