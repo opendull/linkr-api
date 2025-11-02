@@ -28,17 +28,18 @@ def get_db_connection():
     )
 
 # Read Firebase JSON from environment variable (single-line JSON string)
-cred_json_str = os.getenv("FIREBASE_CRED_JSON")
+base64_creds = os.getenv("FIREBASE_CRED_JSON")
 
-if not cred_json_str:
+if not base64_creds:
     raise RuntimeError("FIREBASE_CRED_JSON environment variable not set!")
 
-cred_json_str = base64.b64decode(cred_base64_str).decode('utf-8')
+json_creds_str = base64.b64decode(base64_creds).decode('utf-8')
 # Convert the JSON string to a Python dictionary
-cred_dict = json.loads(cred_json_str)
+creds_dict = json.loads(json_creds_str)
+
 if not firebase_admin._apps:
-    cred = credentials.Certificate(cred_dict)
-    firebase_admin.initialize_app(cred)    
+    cred = credentials.Certificate(creds_dict)
+    firebase_admin.initialize_app(cred)  
 
 # -----------------------------
 # CONFIGURATION
