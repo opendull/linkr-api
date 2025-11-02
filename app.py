@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from sqlalchemy.pool import NullPool
 import firebase_admin
 from firebase_admin import credentials, messaging
+import os
+import json
 
 app = Flask(__name__)
 
@@ -24,9 +26,13 @@ def get_db_connection():
         sslmode="require"
     )
 
+# Read Firebase JSON from environment variable (single-line JSON string)
+cred_json_str = os.getenv("FIREBASE_CRED_JSON")
+cred_dict = json.loads(cred_json_str)  # Convert string back to dict
+
 # Initialize Firebase Admin SDK
-cred = credentials.Certificate("linkr-notification-firebase-adminsdk-fbsvc-5c70168807.json")  # path to your downloaded key file
-firebase_admin.initialize_app(cred)
+cred = credentials.Certificate(cred_dict)
+initialize_app(cred)  # ✅ This line does not change
 
 
 # -----------------------------
@@ -569,4 +575,4 @@ def register_fcm():
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(debug=True)
