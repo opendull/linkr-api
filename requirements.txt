@@ -8,4 +8,4 @@ psycopg2-binary==2.9.9
 SQLAlchemy==2.0.23
 gunicorn==21.2.0
 python-dotenv==1.0.1
-firebase-admin==6.1.1
+firebase-admin==7.1.0
