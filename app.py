@@ -146,14 +146,14 @@ class PingLocation(db.Model):
     ping_id = db.Column(db.Integer, db.ForeignKey('pings.id'), nullable=False, unique=True)
     name = db.Column(db.String(255), nullable=False)
     address = db.Column(db.Text)
+    latitude = db.Column(db.Float, nullable=False)
+    longitude = db.Column(db.Float, nullable=False)
     created_at = db.Column(db.DateTime, default=db.func.now())
 
-    # This defines a one-to-one relationship.
-    # You can now access the location from a ping object using `ping.location`
-    # Make sure your Ping model also has a relationship to PingLocation if you want to access it from Ping
-    # For example, in your Ping model:
-    # location = db.relationship('PingLocation', backref='ping', uselist=False, lazy=True)
     ping = db.relationship('Ping', backref=db.backref('location', uselist=False))
+
+    def __repr__(self):
+        return f'<PingLocation for Ping ID {self.ping_id}>'
 
 
     def __repr__(self):
@@ -484,12 +484,14 @@ def send_ping():
     current_user_id = get_jwt_identity()
     receiver_id = data.get('receiver_id')
     
-    # New: Get location data from the request
+    # New: Get location data from the request, including coordinates
     location_name = data.get('location_name')
     location_address = data.get('location_address')
+    latitude = data.get('latitude')
+    longitude = data.get('longitude')
 
-    if not receiver_id or not location_name:
-        return jsonify({"error": "receiver_id and location_name are required"}), 400
+    if not receiver_id or not location_name or latitude is None or longitude is None:
+        return jsonify({"error": "receiver_id, location_name, latitude, and longitude are required"}), 400
     if receiver_id == current_user_id:
         return jsonify({"error": "Cannot ping self"}), 400
 
@@ -499,11 +501,13 @@ def send_ping():
         db.session.add(ping)
         db.session.commit()  # Commit here to get the generated ping.id
 
-        # Create the PingLocation linked to the Ping
+        # Create the PingLocation linked to the Ping, now with coordinates
         ping_location = PingLocation(
             ping_id=ping.id,
             name=location_name,
-            address=location_address
+            address=location_address,
+            latitude=latitude,
+            longitude=longitude
         )
         db.session.add(ping_location)
         db.session.commit()
@@ -516,7 +520,11 @@ def send_ping():
                 t.fcm_token,
                 title="New Ping",
                 body=f"{sender.name if sender else 'Someone'} wants to meet at {location_name}",
-                data={"ping_id": str(ping.id), "sender_id": str(current_user_id)}
+                data={
+                    "type": "new_ping", # Added type for client-side handling
+                    "ping_id": str(ping.id),
+                    "sender_id": str(current_user_id)
+                }
             )
 
         return jsonify({"message": "Ping sent and notification triggered!"}), 201
