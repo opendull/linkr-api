@@ -529,26 +529,36 @@ def send_ping():
 @app.route('/ping/incoming', methods=['GET'])
 @jwt_required()
 def incoming_pings():
-    current_user_id = get_jwt_identity()
-    
-    # This query now joins the pings, locations, and users tables
-    pings_with_details = db.session.query(Ping, PingLocation, User.name.label("sender_name")).join(PingLocation, Ping.id == PingLocation.ping_id).join(User, User.id == Ping.sender_id).filter(Ping.receiver_id == current_user_id, Ping.status == 'pending').all()
+    try:
+        current_user_id = get_jwt_identity()
+        
+        pings_with_details = db.session.query(Ping, PingLocation, User.name.label("sender_name"))\
+            .join(PingLocation, Ping.id == PingLocation.ping_id)\
+            .join(User, User.id == Ping.sender_id)\
+            .filter(Ping.receiver_id == current_user_id, Ping.status == 'pending').all()
 
-    results = []
-    for ping, location, sender_name in pings_with_details:
-        results.append({
-            "id": ping.id,
-            "sender_id": str(ping.sender_id),
-            "sender_name": sender_name,  # Sender's name is now included
-            "status": ping.status,
-            "created_at": ping.created_at.isoformat(),
-            "location": {  # Meeting location is now included
-                "name": location.name,
-                "address": location.address
+        results = []
+        for ping, location, sender_name in pings_with_details:
+            # Explicitly build the dictionary with safe types
+            ping_data = {
+                "id": int(ping.id),
+                "sender_id": str(ping.sender_id),
+                "sender_name": str(sender_name),
+                "status": str(ping.status),
+                "created_at": ping.created_at.isoformat() if ping.created_at else None,
+                "location": {
+                    "name": str(location.name),
+                    "address": str(location.address) if location.address else None
+                }
             }
-        })
+            results.append(ping_data)
 
-    return jsonify(results)
+        return jsonify(results)
+    except Exception as e:
+        # Log the full error to the console to see what's happening
+        print(f"Error in /ping/incoming: {e}")
+        # Return a generic 500 error
+        return jsonify({"error": "An internal server error occurred while fetching pings."}), 500
 
 @app.route('/ping/<int:ping_id>/respond', methods=['POST'])
 @jwt_required()
