@@ -13,6 +13,7 @@ import firebase_admin
 from firebase_admin import credentials, messaging
 import os
 import json
+import base64
 
 app = Flask(__name__)
 
@@ -28,11 +29,16 @@ def get_db_connection():
 
 # Read Firebase JSON from environment variable (single-line JSON string)
 cred_json_str = os.getenv("FIREBASE_CRED_JSON")
-cred_dict = json.loads(cred_json_str)  # Convert string back to dict
 
-# Initialize Firebase Admin SDK
-cred = credentials.Certificate(cred_dict)
-firebase_admin.initialize_app(cred)  # ✅ This line does not change
+if not cred_json_str:
+    raise RuntimeError("FIREBASE_CRED_JSON environment variable not set!")
+
+cred_json_str = base64.b64decode(cred_base64_str).decode('utf-8')
+# Convert the JSON string to a Python dictionary
+cred_dict = json.loads(cred_json_str)
+if not firebase_admin._apps:
+    cred = credentials.Certificate(cred_dict)
+    firebase_admin.initialize_app(cred)    
 
 # -----------------------------
 # CONFIGURATION
