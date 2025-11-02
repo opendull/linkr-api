@@ -139,6 +139,26 @@ class UserFCMToken(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+class PingLocation(db.Model):
+    __tablename__ = 'ping_locations'
+
+    id = db.Column(db.Integer, primary_key=True)
+    ping_id = db.Column(db.Integer, db.ForeignKey('pings.id'), nullable=False, unique=True)
+    name = db.Column(db.String(255), nullable=False)
+    address = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=db.func.now())
+
+    # This defines a one-to-one relationship.
+    # You can now access the location from a ping object using `ping.location`
+    # Make sure your Ping model also has a relationship to PingLocation if you want to access it from Ping
+    # For example, in your Ping model:
+    # location = db.relationship('PingLocation', backref='ping', uselist=False, lazy=True)
+    ping = db.relationship('Ping', backref=db.backref('location', uselist=False))
+
+
+    def __repr__(self):
+        return f'<PingLocation for Ping ID {self.ping_id}>'
+
 # -----------------------------
 # AUTH ROUTES
 # -----------------------------
@@ -463,41 +483,70 @@ def send_ping():
     data = request.get_json()
     current_user_id = get_jwt_identity()
     receiver_id = data.get('receiver_id')
+    
+    # New: Get location data from the request
+    location_name = data.get('location_name')
+    location_address = data.get('location_address')
 
-    if not receiver_id:
-        return jsonify({"error": "receiver_id required"}), 400
+    if not receiver_id or not location_name:
+        return jsonify({"error": "receiver_id and location_name are required"}), 400
     if receiver_id == current_user_id:
         return jsonify({"error": "Cannot ping self"}), 400
 
-    ping = Ping(sender_id=current_user_id, receiver_id=receiver_id)
-    db.session.add(ping)
-    db.session.commit()
+    try:
+        # Create the Ping
+        ping = Ping(sender_id=current_user_id, receiver_id=receiver_id)
+        db.session.add(ping)
+        db.session.commit()  # Commit here to get the generated ping.id
 
-    # Send notification via Firebase
-    sender = User.query.get(current_user_id)
-    tokens = UserFCMToken.query.filter_by(user_id=receiver_id).all()
-    for t in tokens:
-        send_fcm_notification(
-            t.fcm_token,
-            title="New Ping",
-            body=f"{sender.name if sender else 'Someone'} pinged you",
-            data={"ping_id": str(ping.id), "sender_id": str(current_user_id)}
+        # Create the PingLocation linked to the Ping
+        ping_location = PingLocation(
+            ping_id=ping.id,
+            name=location_name,
+            address=location_address
         )
+        db.session.add(ping_location)
+        db.session.commit()
 
-    return jsonify({"message": "Ping sent and notification triggered!"}), 201
+        # --- Send notification via Firebase ---
+        sender = User.query.get(current_user_id)
+        tokens = UserFCMToken.query.filter_by(user_id=receiver_id).all()
+        for t in tokens:
+            send_fcm_notification(
+                t.fcm_token,
+                title="New Ping",
+                body=f"{sender.name if sender else 'Someone'} wants to meet at {location_name}",
+                data={"ping_id": str(ping.id), "sender_id": str(current_user_id)}
+            )
+
+        return jsonify({"message": "Ping sent and notification triggered!"}), 201
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error sending ping: {e}")
+        return jsonify({"error": "An internal error occurred"}), 500
 
 @app.route('/ping/incoming', methods=['GET'])
 @jwt_required()
 def incoming_pings():
     current_user_id = get_jwt_identity()
-    pings = Ping.query.filter_by(receiver_id=current_user_id, status='pending').all()
+    
+    # This query now joins the pings, locations, and users tables
+    pings_with_details = db.session.query(Ping, PingLocation, User.name.label("sender_name")).join(PingLocation, Ping.id == PingLocation.ping_id).join(User, User.id == Ping.sender_id).filter(Ping.receiver_id == current_user_id, Ping.status == 'pending').all()
 
-    results = [{
-        "id": p.id,
-        "sender_id": p.sender_id,
-        "status": p.status,
-        "created_at": p.created_at
-    } for p in pings]
+    results = []
+    for ping, location, sender_name in pings_with_details:
+        results.append({
+            "id": ping.id,
+            "sender_id": str(ping.sender_id),
+            "sender_name": sender_name,  # Sender's name is now included
+            "status": ping.status,
+            "created_at": ping.created_at.isoformat(),
+            "location": {  # Meeting location is now included
+                "name": location.name,
+                "address": location.address
+            }
+        })
 
     return jsonify(results)
 
